@@ -12,14 +12,15 @@ from yoctopuce.yocto_temperature import *
 from yoctopuce.yocto_humidity import *
 from yoctopuce.yocto_carbondioxide import *
 
-url = "http://oktorok.local/api/job"
+url = "http://10.10.11.70/api/job"
+url2 = "http://10.10.11.70/api/printer?exclude=temperature,sd"
 headers = {'X-Api-Key': '4C06032E7E0B49709C5FF042E477178C'}
 ymeteo = 'oktorokMeteo'
 yco2 = 'oktorokCO2'
 yrelay = 'oktorokRelay'
 yerrormsg = YRefParam()
-mylcd = RPi_I2C_driver.lcd()
-displaytime = True
+date = strftime("%H:%M")
+
 
 fontdata = [
     # Clock icon
@@ -85,24 +86,17 @@ def getpercent(p):
     return '{0:03d}'.format(int(p))
 
 
-if YAPI.RegisterHub("http://oktorok.local", yerrormsg) != YAPI.SUCCESS:
+if YAPI.RegisterHub("10.10.11.70", yerrormsg) != YAPI.SUCCESS:
     sys.exit("init error" + yerrormsg.value)
 
-mylcd.lcd_clear()
-mylcd.lcd_load_custom_chars(fontdata)
-mylcd.lcd_display_string("Chileo Printer", 1)
+try:
+    data = requests.get(url2, headers=headers)
+    json_data = json.loads(data.text)
+except requests.exceptions.RequestException as e:
+    print e
+    sys.exit(1)
 
-mylcd.lcd_display_string_pos(unichr(1), 2, 0)
-mylcd.lcd_display_string_pos(unichr(3), 2, 7)
-mylcd.lcd_display_string_pos(unichr(6), 2, 14)
-mylcd.lcd_display_string_pos(unichr(0), 4, 0)
-mylcd.lcd_display_string_pos(unichr(4), 4, 7)
-mylcd.lcd_display_string_pos(unichr(5), 4, 15)
-
-
-while True:
-    date = strftime("%H:%M")
-
+if json_data['state']['flags']['printing']:
     try:
         data = requests.get(url, headers=headers)
         json_data = json.loads(data.text)
@@ -110,25 +104,26 @@ while True:
         print e
         sys.exit(1)
 
-    try:
-        mylcd.lcd_display_string_pos(date, 1, 15)
-        mylcd.lcd_display_string_pos(gettemperature(ymeteo) + unichr(2), 2, 1)
-        mylcd.lcd_display_string_pos(gethumidity(ymeteo) + "%", 2, 8)
-        mylcd.lcd_display_string_pos(getco2(yco2), 2, 15)
+    mylcd = RPi_I2C_driver.lcd()
+    mylcd.lcd_load_custom_chars(fontdata)
+    # mylcd.lcd_clear()
+    mylcd.lcd_display_string("Chileo Printer", 1)
+    mylcd.lcd_display_string_pos(date, 1, 15)
 
-        mylcd.lcd_display_string_pos(
-            secondstotime(json_data['progress']['printTime']
-                          ), 4, 1)
-        mylcd.lcd_display_string_pos(
-            secondstotime(json_data['progress']['printTimeLeft']
-                          ), 4, 8)
-
-        mylcd.lcd_display_string_pos(
-            getpercent(json_data['progress']['completion']) + "%", 4, 16)
-
-    except (KeyboardInterrupt, SystemExit):
-        print('Interrupt received, stopping...')
-    sleep(30)
-
-
-print json_data['job']['file']['name']
+    mylcd.lcd_display_string_pos(unichr(1), 2, 0)
+    mylcd.lcd_display_string_pos(gettemperature(ymeteo) + unichr(2), 2, 1)
+    mylcd.lcd_display_string_pos(unichr(3), 2, 7)
+    mylcd.lcd_display_string_pos(gethumidity(ymeteo) + "%", 2, 8)
+    mylcd.lcd_display_string_pos(unichr(6), 2, 14)
+    mylcd.lcd_display_string_pos(getco2(yco2), 2, 15)
+    mylcd.lcd_display_string_pos(unichr(0), 4, 0)
+    mylcd.lcd_display_string_pos(
+        secondstotime(json_data['progress']['printTime']
+                      ), 4, 1)
+    mylcd.lcd_display_string_pos(unichr(4), 4, 7)
+    mylcd.lcd_display_string_pos(
+        secondstotime(json_data['progress']['printTimeLeft']
+                      ), 4, 8)
+    mylcd.lcd_display_string_pos(unichr(5), 4, 15)
+    mylcd.lcd_display_string_pos(
+        getpercent(json_data['progress']['completion']) + "%", 4, 16)
